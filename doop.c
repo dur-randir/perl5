@@ -332,11 +332,11 @@ S_do_trans_count_utf8(pTHX_ SV * const sv, AV * const invmap)
 
     PERL_ARGS_ASSERT_DO_TRANS_COUNT_UTF8;
 
-    //DEBUG_U(sv_dump((SV*) invmap));
-    //DEBUG_U(sv_dump((SV*) from_invlist));
-    //DEBUG_U(sv_dump((SV*) to_invmap_sv));
+    /*DEBUG_U(sv_dump((SV*) invmap));*/
+    /*DEBUG_U(sv_dump((SV*) from_invlist));*/
+    /*DEBUG_U(sv_dump((SV*) to_invmap_sv));*/
     s = (U8*)SvPV_nomg(sv, len);
-    //DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: '%s', len=%" IVdf "\n", __FILE__, __LINE__, s, len));
+    /*DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: '%s', len=%" IVdf "\n", __FILE__, __LINE__, s, len));*/
 
     send = s + len;
 
@@ -559,8 +559,9 @@ S_do_trans_utf8(pTHX_ SV * const sv, AV * const invmap)
         s += s_len;
     if (! inplace) {
 	sv_setpvn(sv, (char*)d0, d - d0);
-	//Safefree(d0);
+	/*Safefree(d0);
             //Safefree(s0);
+            */
     }
     else {
 	*d = '\0';
@@ -599,8 +600,8 @@ Perl_do_trans(pTHX_ SV *sv)
 
     PERL_ARGS_ASSERT_DO_TRANS;
 
-    //DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: %d\n", __FILE__, __LINE__, SvTYPE(map)));
-    //DEBUG_U(sv_dump(map));
+    /*DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: %d\n", __FILE__, __LINE__, SvTYPE(map)));*/
+    /*DEBUG_U(sv_dump(map));*/
 
     identical = flags & OPpTRANS_IDENTICAL;
 
