@@ -404,6 +404,7 @@ S_do_trans_utf8(pTHX_ SV * const sv, AV * const invmap)
     const UV* from_array = invlist_array(from_invlist);
     UV final_map;
     bool out_is_utf8 = SvUTF8(sv);
+    STRLEN s_len;
 
     PERL_ARGS_ASSERT_DO_TRANS_UTF8;
 
@@ -544,7 +545,7 @@ S_do_trans_utf8(pTHX_ SV * const sv, AV * const invmap)
         s += s_len;
     }
 
-    STRLEN s_len = 0;
+    s_len = 0;
     /* XXX outdent */ 
 	if (d > dend) {
 	    const STRLEN clen = d - d0;
