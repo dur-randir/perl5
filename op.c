@@ -6823,19 +6823,8 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
     /* Instead of 'transliterated', the comments here use 'unmapped' for the
      * characters that are left unchanged by the operation; otherwise they are
      * 'mapped'
-        Mothballed a second time because kept finding glitchs, so too late in development cycle
 
          * Left to do:
-         *  Really thinking through 'grows' in the UTF-8 case.  In the case of
-         *  a non-UTF8 target, and we don't have any possible translations to
-         *  above UTF8, this can be ignored.  But it is set true if anything
-         *  translates to something whose utf8 representation is longer than
-         *  it.  It would be nice to know ahead of time, given a non-UTF-8
-         *  target, if there are things in it that could force it into UTF-8.
-         *  Perhaps changing at runtime, the pretty much useless AFAIK,
-         *  OPpTRANS_FROM_UTF flag into being true only if that were the case.
-         *  Maybe it already means that?
-         *
          *  Going through this code and seeing about code coverage, XXX's 
          *  commenting
          *
@@ -6957,9 +6946,9 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
         }
 
         /* The inversion list is done; now invert it */
-        //DEBUG_U(sv_dump(inverted_tlist));
+        /*DEBUG_U(sv_dump(inverted_tlist));*/
         _invlist_invert(inverted_tlist);
-        //DEBUG_U(sv_dump(inverted_tlist));
+        /*DEBUG_U(sv_dump(inverted_tlist));*/
 
         /* Now go through the inverted list and create a new tstr for the rest
          * of the routine to use.  Since the UTF-8 version can have ranges, and
@@ -6995,7 +6984,6 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
         SvREFCNT_dec_NN(inverted_tlist);
     }
 
-
     /* For non-/d, an empty rhs means to use the lhs */
     if (rlen == 0 && ! del) {
         r0 = t0;
@@ -7008,9 +6996,9 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
     for (pass2 = 0; pass2 < 2; pass2++) {
 
         /* Here, the input has been adjusted if necessary.  Now create the
-         * inversion map.  Initially, everything is TR_UNLISTED.  An inversion list
-         * is created, and then we use how the internals work to create the
-         * partitioned (by byte length) inversion map */
+         * inversion map.  Initially, everything is TR_UNLISTED.  An inversion
+         * list is created, and then we use how the internals work to create
+         * the partitioned (by byte length) inversion map */
         t_invlist = _add_range_to_invlist(t_invlist, 0, UV_MAX);
         DEBUG_U(sv_dump(t_invlist));
 
@@ -7040,7 +7028,7 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
         }
 
         DEBUG_U(PerlIO_printf(Perl_debug_log, "%d: /c=%d; /s=%d; /d=%d\n", __LINE__, complement, squash, del));
-        //DEBUG_U(invmap_dump(t_invlist, r_map));
+        /*DEBUG_U(invmap_dump(t_invlist, r_map));*/
         DEBUG_U(PerlIO_printf(Perl_debug_log, "tstr=%s\n", _byte_dump_string(t, tend - t, 0)));
         DEBUG_U(PerlIO_printf(Perl_debug_log, "rstr=%s\n", _byte_dump_string(r, rend - r, 0)));
 
@@ -7048,20 +7036,21 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 
         /* Now go through the search list constructing an inversion map.  The
          * input is not necessarily in any particular order.  Making it an
-         * inversion map orders it, potentially simplifying, and makes it easy to
-         * deal with at run time.  This is the only place in core that generates an
-         * inversion map; if others were introduced, it might be better to create
-         * general purpose routines to handle them.
+         * inversion map orders it, potentially simplifying, and makes it easy
+         * to deal with at run time.  This is the only place in core that
+         * generates an inversion map; if others were introduced, it might be
+         * better to create general purpose routines to handle them.
          *
-         * An inversion map consists of two parallel arrays.  One is essentially an
-         * inversion list: an ordered list of code points such that each element
-         * gives the first code point of a range of consecutive code points that
-         * map to the element in the other array that has the same index as this
-         * one (in other words, the corresponding element).  Thus the range extends
-         * up to (but not including) the code point given by the next higher
-         * element.  In a true inversion map, the corresponding element in the
-         * other array gives the mapping of the first code point in the range, with
-         * the understanding that the next higher code point in the inversion
+         * An inversion map consists of two parallel arrays.  One is
+         * essentially an inversion list: an ordered list of code points such
+         * that each element gives the first code point of a range of
+         * consecutive code points that map to the element in the other array
+         * that has the same index as this one (in other words, the
+         * corresponding element).  Thus the range extends up to (but not
+         * including) the code point given by the next higher element.  In a
+         * true inversion map, the corresponding element in the other array
+         * gives the mapping of the first code point in the range, with the
+         * understanding that the next higher code point in the inversion
          * list's range will map to the next higher code point in the map.
          *
          * So if at element [i], let's say we have:
@@ -7069,68 +7058,71 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
          *     t_invlist  r_map
          * [i]    A         a
          *
-         * This means that A => a, B => b, C => c....  Let's say that the situation
-         * is such that:
+         * This means that A => a, B => b, C => c....  Let's say that the
+         * situation is such that:
          *
          * [i+1]  L        -1
          *
          * This means the sequence that started at [i] stops at K => k.  This
-         * illustrates that you need to look at the next element to find where a
-         * sequence stops.  Except, the highest element in the inversion list
-         * begins a range that is understood to extend to the platform's infinity.
+         * illustrates that you need to look at the next element to find where
+         * a sequence stops.  Except, the highest element in the inversion list
+         * begins a range that is understood to extend to the platform's
+         * infinity.
          *
-         * This routine makes a couple of modifications to traditional inversion
-         * maps.  Two mappings are reserved:
+         * This routine makes a couple of modifications to traditional
+         * inversion maps.  Two mappings are reserved:
          *
          *  TR_UNLISTED (or -1) indicates that the no code point in the range
-         *      is listed in the tr/// searchlist.  At runtime, these are always
-         *      passed through unchanged.  In the inversion map, all points in the
-         *      range are mapped to -1, instead of increasing, like the 'L' in the
-         *      example above.
+         *      is listed in the tr/// searchlist.  At runtime, these are
+         *      always passed through unchanged.  In the inversion map, all
+         *      points in the range are mapped to -1, instead of increasing,
+         *      like the 'L' in the example above.
          *
-         *      We start the parse with every code point mapped to this, and as we
-         *      parse and find ones that are listed in the search list, we carve
-         *      out ranges as we go along that override that.
+         *      We start the parse with every code point mapped to this, and as
+         *      we parse and find ones that are listed in the search list, we
+         *      carve out ranges as we go along that override that.
          *
          *  TR_SPECIAL_HANDLING (or -2) indicates that every code point in the
-         *      range needs special handling.  Again, all code points in the range
-         *      are mapped to -2, instead of increasing.
+         *      range needs special handling.  Again, all code points in the
+         *      range are mapped to -2, instead of increasing.
          *
-         *      Under /d this value means the code point should be deleted from the
-         *      transliteration when encountered.
+         *      Under /d this value means the code point should be deleted from
+         *      the transliteration when encountered.
          *
-         *      Otherwise, it marks that every code point in the range is to map to
-         *      the final character in the replacement list.  This happens only
-         *      when the replacement list is shorter than the search one, so there
-         *      are things in the search list that have no correspondence in the
-         *      replacement list.  For example, in tr/a-z/A/, 'A' is the final
-         *      value, and the inversion map generated for this would be like this:
+         *      Otherwise, it marks that every code point in the range is to
+         *      map to the final character in the replacement list.  This
+         *      happens only when the replacement list is shorter than the
+         *      search one, so there are things in the search list that have no
+         *      correspondence in the replacement list.  For example, in
+         *      tr/a-z/A/, 'A' is the final value, and the inversion map
+         *      generated for this would be like this:
          *          \0  =>  -1
          *          a   =>   A
          *          b-z =>  -2
          *          z+1 =>  -1
-         *      'A' appears once, then the remainder of the range maps to -2.  The
-         *      use of -2 isn't strictly necessary, as an inversion map is capable
-         *      of representing this situation, but not nearly so compactly, and
-         *      this is actually quite commonly encountered.  Indeed, the original
-         *      design of this code used a full inversion map for this.  But things
-         *      like
+         *      'A' appears once, then the remainder of the range maps to -2.
+         *      The use of -2 isn't strictly necessary, as an inversion map is
+         *      capable of representing this situation, but not nearly so
+         *      compactly, and this is actually quite commonly encountered.
+         *      Indeed, the original design of this code used a full inversion
+        *      map for this.  But things like
          *          tr/\0-\x{FFFF}/A/
-         *      generated huge data structures, slowly, and the execution was also
-         *      slow.  So the current scheme was implemented.
+         *      generated huge data structures, slowly, and the execution was
+         *      also slow.  So the current scheme was implemented.
          *
          *  So, if the next element in our example is:
          *
          * [i+2]  Q        q
          *
-         * Then all of L, M, N, O, and P map to TR_UNLISTED.  If the next elements are
+         * Then all of L, M, N, O, and P map to TR_UNLISTED.  If the next
+         * elements are
          *
          * [i+3]  R        z
          * [i+4]  S       TR_UNLISTED
          *
-         * Then Q => q; R => z; and S => TR_UNLISTED.  If [i+4] (the 'S') is the
-         * final element in the arrays, every code point from S to infinity maps to
-         * TR_UNLISTED.
+         * Then Q => q; R => z; and S => TR_UNLISTED.  If [i+4] (the 'S') is
+         * the final element in the arrays, every code point from S to infinity
+         * maps to TR_UNLISTED.
          *
          */
         while (t < tend || t_range_count > 0) {
@@ -7144,14 +7136,14 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
             UV r_cp_end;
             SSize_t i, span, invmap_range_length_remaining;
 
-            /* If we are in the middle of processing a range in the 'target' side,
-             * the previous iteration has set us up.  Otherwise, look at the next
-             * character in the search list */
+            /* If we are in the middle of processing a range in the 'target'
+             * side, the previous iteration has set us up.  Otherwise, look at
+             * the next character in the search list */
             if (t_range_count <= 0) {
                 if (! tstr_utf8) {
 
-                    /* Here, not in the middle of a range, and not UTF-8.  The next
-                     * code point is the single byte where we're at */
+                    /* Here, not in the middle of a range, and not UTF-8.  The
+                     * next code point is the single byte where we're at */
                     t_cp = *t;
                     t_range_count = 1;
                     t++;
@@ -7159,19 +7151,22 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                 else {
                     Size_t t_char_len;
 
-                    /* Here, not in the middle of a range, and is UTF-8.  The next
-                     * code point is the next UTF-8 char in the input.  We know the
-                     * input is valid, because the toker constructed it */
+                    /* Here, not in the middle of a range, and is UTF-8.  The
+                     * next code point is the next UTF-8 char in the input.  We
+                     * know the input is valid, because the toker constructed
+                     * it */
                     t_cp = valid_utf8_to_uvchr(t, &t_char_len);
                     t += t_char_len;
 
                     /* UTF-8 strings (only) have been parsed in toke.c to have
-                     * ranges.  See if the next byte indicates that this was the
-                     * first element of a range.  If so, get the final element and
-                     * calculate the range size.  If not, the range size is 1 */
+                     * ranges.  See if the next byte indicates that this was
+                     * the first element of a range.  If so, get the final
+                     * element and calculate the range size.  If not, the range
+                     * size is 1 */
                     if (t < tend && *t == RANGE_INDICATOR) {
                         t++;
-                        t_range_count = valid_utf8_to_uvchr(t, &t_char_len) - t_cp + 1;
+                        t_range_count = valid_utf8_to_uvchr(t, &t_char_len)
+                                      - t_cp + 1;
                         t += t_char_len;
                     }
                     else {
@@ -7187,9 +7182,9 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
             if (r_range_count <= 0) {
                 if (r >= rend) {
 
-                    /* But if we've exhausted the rhs, there is nothing to map to,
-                     * except the special handling one, and we make the range the
-                     * same size as the lhs one. */
+                    /* But if we've exhausted the rhs, there is nothing to map
+                     * to, except the special handling one, and we make the
+                     * range the same size as the lhs one. */
                     r_cp = TR_SPECIAL_HANDLING;
                     r_range_count = t_range_count;
 
@@ -7210,7 +7205,8 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                         r += r_char_len;
                         if (r < rend && *r == RANGE_INDICATOR) {
                             r++;
-                            r_range_count = valid_utf8_to_uvchr(r, &r_char_len) - r_cp + 1;
+                            r_range_count = valid_utf8_to_uvchr(r,
+                                                    &r_char_len) - r_cp + 1;
                             r += r_char_len;
                         }
                         else {
@@ -7218,7 +7214,8 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                         }
                     }
 
-                    /* ? This may no longer be needed, but I suspecit it is XXX */
+                    /* ? This may no longer be needed, but I suspecit it is XXX
+                     * */
                     if (! pass2 && r_cp == TR_SPECIAL_HANDLING) {
                         r_range_count = t_range_count;
                     }
@@ -7239,11 +7236,12 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
              * */
             min_range_count = MIN(t_range_count, r_range_count);
 
-            /* Search the inversion list for the entry that contains the input code
-             * point <cp>.  The inversion map was initialized to cover the entire
-             * range of possible inputs, so this should not fail.  So the return
-             * value is the index into the list's array of the range that contains
-             * <cp>, that is, 'i' such that array[i] <= cp < array[i+1] */
+            /* Search the inversion list for the entry that contains the input
+             * code point <cp>.  The inversion map was initialized to cover the
+             * entire range of possible inputs, so this should not fail.  So
+             * the return value is the index into the list's array of the range
+             * that contains <cp>, that is, 'i' such that array[i] <= cp <
+             * array[i+1] */
             i = _invlist_search(t_invlist, t_cp);
             assert(i >= 0);
 
@@ -7260,12 +7258,12 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
              * where 'x' and 'y' above are not to be taken literally.
              *
              * The maximum chunk we can handle in this loop iteration, is the
-             * smallest of the three components: the lhs 't_', the rhs 'r_', and
-             * the remainder of the range in element [i].  (That range will have
-             * everything in it be of the same class; we can't cross into another
-             * class.)  'min_range_count' already contains the smallest of the
-             * first two values.  The final one is irrelevant if the map is to the
-             * special indicator */
+             * smallest of the three components: the lhs 't_', the rhs 'r_',
+             * and the remainder of the range in element [i].  (That range will
+             * have everything in it be of the same class; we can't cross into
+             * another class.)  'min_range_count' already contains the smallest
+             * of the first two values.  The final one is irrelevant if the map
+             * is to the special indicator */
 
             invmap_range_length_remaining = ((Size_t) i + 1 < len)
                                             ? t_array[i+1] - t_cp
@@ -7288,36 +7286,39 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                 }
             }
 
-            /* If a character appears in the search list more than once, the 2nd
-             * and succeeding occurrences are ignored, so only do this range if
-             * haven't already processed this character.  (The range has been set
-             * up so that all members in it will be of the same ilk) */
+            /* If a character appears in the search list more than once, the
+             * 2nd and succeeding occurrences are ignored, so only do this
+             * range if haven't already processed this character.  (The range
+             * has been set up so that all members in it will be of the same
+             * ilk) */
             if (r_map[i] == TR_UNLISTED) {
                 DEBUG_Uv(PerlIO_printf(Perl_debug_log, "Processing %" UVxf "-%" UVxf " => %" UVxf "-%" UVxf "\n", t_cp, t_cp_end, r_cp, r_cp_end));
 
-                /* This is the first definition for this chunk, hence is valid and
-                 * needs to be processed.  Here and in the comments below, we use
-                 * the above sample data.  The t_cp chunk must be any contiguous
-                 * subset of M, N, O, P, and/or Q.
+                /* This is the first definition for this chunk, hence is valid
+                 * and needs to be processed.  Here and in the comments below,
+                 * we use the above sample data.  The t_cp chunk must be any
+                 * contiguous subset of M, N, O, P, and/or Q.
                  *
-                 * The t_invlist has been partitioned so that all elements in any
-                 * single range have the same number of bytes in their UTF-8
-                 * representations.  And the r space is either a single byte, or a
-                 * range of strictly monotonically increasing code points.  So the
-                 * final element in the range will be represented by no fewer bytes
-                 * than the initial one.  That means that if the final code point
-                 * in the t range has at least as many bytes as the final code
-                 * point in the r, then all code points in the t range have at
-                 * least as many bytes as their corresponding r range element.  But
-                 * if that's not true, the transliteration of at least the final
-                 * code point grows in length.  As an example, suppose we had
+                 * The t_invlist has been partitioned so that all elements in
+                 * any single range have the same number of bytes in their
+                 * UTF-8 representations.  And the r space is either a single
+                 * byte, or a range of strictly monotonically increasing code
+                 * points.  So the final element in the range will be
+                 * represented by no fewer bytes than the initial one.  That
+                 * means that if the final code point in the t range has at
+                 * least as many bytes as the final code point in the r, then
+                 * all code points in the t range have at least as many bytes
+                 * as their corresponding r range element.  But if that's not
+                 * true, the transliteration of at least the final code point
+                 * grows in length.  As an example, suppose we had
                  *      tr/\x{fff0}-\x{fff1}/\x{ffff}-\x{10000}/
-                 * The UTF-8 for all but the final character occupies 3 bytes on
-                 * ASCII platforms.  We have deliberately set up the data structure
-                 * so that any range in the lhs gets split into chunks for
-                 * processing, such that every code point in a chunk has the same
-                 * number of UTF-8 bytes.  We only have to check the final code
-                 * point in the rhs against any code point in the lhs. */
+                 * The UTF-8 for all but the final character occupies 3 bytes
+                 * on ASCII platforms.  We have deliberately set up the data
+                 * structure so that any range in the lhs gets split into
+                 * chunks for processing, such that every code point in a chunk
+                 * has the same number of UTF-8 bytes.  We only have to check
+                 * the final code point in the rhs against any code point in
+                 * the lhs. */
                 if ( ! pass2
                     && r_cp_end != TR_SPECIAL_HANDLING
                     && UVCHR_SKIP(t_cp_end) < UVCHR_SKIP(r_cp_end))
@@ -7332,26 +7333,27 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                     o->op_private |= OPpTRANS_GROWS;
                 }
 
-                /* The very first range is marked as adjacent to the non-existent
-                 * range below it, as it causes things to "just work" (TradeMark)
+                /* The very first range is marked as adjacent to the
+                 * non-existent range below it, as it causes things to "just
+                 * work" (TradeMark)
                  *
-                 * If the lowest code point in this chunk is M, it adjoins the J-L
-                 * range */
+                 * If the lowest code point in this chunk is M, it adjoins the
+                 * J-L range */
                 if (t_cp == t_array[i]) {
                     adjacent_to_range_below = TRUE;
 
-                    /* And if the map has the same offset from the beginning of the
-                     * range as does this new code point (or both are for
-                     * TR_SPECIAL_HANDLING), this chunk can be completely merged
-                     * with the range below.  EXCEPT, we don't merge ranges whose
-                     * UTF-8 byte representations have different lengths, so that
-                     * we can more easily detect if a replacement is longer than
-                     * the source, that is if it 'grows'.  But in the 2nd pass,
-                     * after we've already found out that it grows, there's no
-                     * reason to not merge */
+                    /* And if the map has the same offset from the beginning of
+                     * the range as does this new code point (or both are for
+                     * TR_SPECIAL_HANDLING), this chunk can be completely
+                     * merged with the range below.  EXCEPT, we don't merge
+                     * ranges whose UTF-8 byte representations have different
+                     * lengths, so that we can more easily detect if a
+                     * replacement is longer than the source, that is if it
+                     * 'grows'.  But in the 2nd pass, after we've already found
+                     * out that it grows, there's no reason to not merge */
                     if (   (i > 0 && (   pass2
                                       || UVCHR_SKIP(t_array[i-1])
-                                                            == UVCHR_SKIP(t_cp)))
+                                                        == UVCHR_SKIP(t_cp)))
                         && (   (   r_cp == TR_SPECIAL_HANDLING
                                 && r_map[i-1] == TR_SPECIAL_HANDLING)
                             || (   r_cp != TR_SPECIAL_HANDLING
@@ -7361,9 +7363,9 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                     }
                 }
 
-                /* Similarly, if the highest code point in this chunk is 'Q', it
-                 * adjoins the range above, and if the map is suitable, can be
-                 * merged with it */
+                /* Similarly, if the highest code point in this chunk is 'Q',
+                 * it adjoins the range above, and if the map is suitable, can
+                 * be merged with it */
                 if (    t_cp_end >= IV_MAX - 1
                     || (   (Size_t) i + 1 < len
                         && (Size_t) t_cp_end + 1 == t_array[i+1]))
@@ -7383,9 +7385,10 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 
                 if (merge_with_range_below && merge_with_range_above) {
 
-                    /* Here the new chunk looks like M => m, ... Q => q; and the
-                     * range above is like R => r, ....  Thus, the [i-1] and [i+1]
-                     * ranges should be seamlessly melded so the result looks like
+                    /* Here the new chunk looks like M => m, ... Q => q; and
+                     * the range above is like R => r, ....  Thus, the [i-1]
+                     * and [i+1] ranges should be seamlessly melded so the
+                     * result looks like
                      *
                      * [i-1]    J   j   # J-T => j-t
                      * [i]      U   y   # U => y, V => y+1, ...
@@ -7401,9 +7404,9 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                 }
                 else if (merge_with_range_below) {
 
-                    /* Here the new chunk looks like M => m, .... But either (or
-                     * both) it doesn't extend all the way up through Q; or the
-                     * range above doesn't start with R => r. */
+                    /* Here the new chunk looks like M => m, .... But either
+                     * (or both) it doesn't extend all the way up through Q; or
+                     * the range above doesn't start with R => r. */
                     if (! adjacent_to_range_above) {
 
                         /* In the first case, let's say the new chunk extends
@@ -7414,7 +7417,8 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                          * [i+1]    R   x   # R => x, S => x+1, T => x+2
                          * [i+2]    U   y   # U => y, V => y+1, ...
                          * ...
-                         * [-1]     Z  -1   # Z => default; as do Z+1, ... infinity
+                         * [-1]     Z  -1   # Z => default; as do Z+1, ...
+                         *                                            infinity
                          */
                         t_array[i] = t_cp_end + 1;
                         r_map[i] = TR_UNLISTED;
@@ -7426,7 +7430,8 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                          * [i]      R   x   # R => x, S => x+1, T => x+2
                          * [i+1]    U   y   # U => y, V => y+1, ...
                          * ...
-                         * [-1]     Z  -1   # Z => default; as do Z+1, ... infinity
+                         * [-1]     Z  -1   # Z => default; as do Z+1, ...
+                         *                                          infinity
                          */
 
                         Move(t_array + i + 1, t_array + i, len - i - 1, UV);
@@ -7439,10 +7444,10 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                 else if (merge_with_range_above) {
 
                     /* Here the new chunk ends with Q => q, and the range above
-                     * must start with R => r, so the two can be merged. But either
-                     * (or both) the new chunk doesn't extend all the way down to
-                     * M; or the mapping of the final code point range below isn't
-                     * m */
+                     * must start with R => r, so the two can be merged. But
+                     * either (or both) the new chunk doesn't extend all the
+                     * way down to M; or the mapping of the final code point
+                     * range below isn't m */
                     if (! adjacent_to_range_below) {
 
                         /* In the first case, let's assume the new chunk starts
@@ -7454,18 +7459,21 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                          * [i+1]    P   p   # P-T => p-t
                          * [i+2]    U   y   # U => y, V => y+1, ...
                          * ...
-                         * [-1]     Z  -1   # Z => default; as do Z+1, ... infinity
+                         * [-1]     Z  -1   # Z => default; as do Z+1, ...
+                         *                                          infinity
                          */
                         t_array[i+1] = t_cp;
                         r_map[i+1] = r_cp;
                     }
-                    else { /* Adjoins the range below, but can't merge with it */
+                    else { /* Adjoins the range below, but can't merge with it
+                            */
                         /*
                          * [i-1]    J   j   # J-L => j-l
                          * [i]      M   x   # M-T => x-5 .. x+2
                          * [i+1]    U   y   # U => y, V => y+1, ...
                          * ...
-                         * [-1]     Z  -1   # Z => default; as do Z+1, ... infinity
+                         * [-1]     Z  -1   # Z => default; as do Z+1, ...
+                         *                                          infinity
                          */
                         Move(t_array + i + 1, t_array + i, len - i - 1, UV);
                         Move(r_map   + i + 1, r_map   + i, len - i - 1, UV);
@@ -7477,8 +7485,9 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                     }
                 }
                 else if (adjacent_to_range_below && adjacent_to_range_above) {
-                    /* The new chunk completely fills the gap between the ranges on
-                     * either side, but can't merge with either of them.
+                    /* The new chunk completely fills the gap between the
+                     * ranges on either side, but can't merge with either of
+                     * them.
                      *
                      * [i-1]    J   j   # J-L => j-l
                      * [i]      M   z   # M => z, N => z+1 ... Q => z+4
@@ -7492,7 +7501,8 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                 }
                 else if (adjacent_to_range_below) {
                     /* The new chunk adjoins the range below, but not the range
-                     * above, and can't merge.  Let's assume the chunk ends at O.
+                     * above, and can't merge.  Let's assume the chunk ends at
+                     * O.
                      *
                      * [i-1]    J   j   # J-L => j-l
                      * [i]      M   z   # M => z, N => z+1, O => z+2
@@ -7518,8 +7528,8 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                 }
                 else if (adjacent_to_range_above) {
                     /* The new chunk adjoins the range above, but not the range
-                     * below, and can't merge.  Let's assume the new chunk starts
-                     * at O
+                     * below, and can't merge.  Let's assume the new chunk
+                     * starts at O
                      *
                      * [i-1]    J   j   # J-L => j-l
                      * [i]      M  -1   # M => default, N => default
@@ -7542,8 +7552,8 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                                     *(get_invlist_offset_addr(t_invlist)));
                 }
                 else {
-                    /* The new chunk adjoins neither the range above, nor the range
-                     * below.  Lets assume it is N..P => n..p
+                    /* The new chunk adjoins neither the range above, nor the
+                     * range below.  Lets assume it is N..P => n..p
                      *
                      * [i-1]    J   j   # J-L => j-l
                      * [i]      M  -1   # M => default
@@ -7562,8 +7572,10 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                     t_array = invlist_array(t_invlist);
                     Renew(r_map, len + 2, UV);
 
-                    Move(t_array + i + 1, t_array + i + 2 + 1, len - i - (2 - 1), UV);
-                    Move(r_map   + i + 1, r_map   + i + 2 + 1, len - i - (2 - 1), UV);
+                    Move(t_array + i + 1,
+                         t_array + i + 2 + 1, len - i - (2 - 1), UV);
+                    Move(r_map   + i + 1,
+                         r_map   + i + 2 + 1, len - i - (2 - 1), UV);
 
                     len += 2;
                     invlist_set_len(t_invlist, len,
@@ -7597,8 +7609,8 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 
         if (pass2) {
             /* We don't need an exact count, but we do need to know if there is
-             * anything left over in the replacement list.  So, just assume it's
-             * one byte per character */
+             * anything left over in the replacement list.  So, just assume
+             * it's one byte per character */
             if (rend > r) {
                 r_count++;
             }
@@ -7723,101 +7735,6 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
         }
 
         tbl->map[tbl->size] = del ? TR_DELETE : rlen ? final_map : TR_R_EMPTY;
-
-#if 0
-        tbl = (OPtrans_map*)PerlMemShared_calloc(struct_size, 1);
-        tbl->size = 256;
-
-        if (complement) {
-            Size_t excess;
-
-            /* in this branch, j is a count of 'consumed' (i.e. paired off
-            * with a search char) replacement chars (so j <= rlen always)
-            */
-            for (i = 0; i < tlen; i++)
-                tbl->map[t[i]] = TR_UNMAPPED;
-
-            for (i = 0, j = 0; i < 256; i++) {
-                if (!tbl->map[i]) {
-                    if (j == rlen) {
-                        if (del)
-                            tbl->map[i] = TR_DELETE;
-                        else if (rlen)
-                            tbl->map[i] = r[j-1];
-                        else
-                            tbl->map[i] = (short)i;
-                    }
-                    else {
-                        tbl->map[i] = r[j++];
-                    }
-                    if (   tbl->map[i] >= 0
-                        &&  UVCHR_IS_INVARIANT((UV)i)
-                        && !UVCHR_IS_INVARIANT((UV)(tbl->map[i]))
-                    )
-                        grows = TRUE;
-                }
-            }
-
-            ASSUME(j <= rlen);
-            excess = rlen - j;
-
-            if (excess) {
-                /* More replacement chars than search chars:
-                * store excess replacement chars at end of main table.
-                */
-
-                struct_size += excess * sizeof(short);
-                tbl = (OPtrans_map*)PerlMemShared_realloc(tbl, struct_size);
-                tbl->size += excess;
-
-                for (i = 0; i < excess; i++)
-                    tbl->map[i + 256] = r[j+i];
-            }
-            else {
-                /* no more replacement chars than search chars */
-                if (!rlen && !del && !squash)
-                    o->op_private |= OPpTRANS_IDENTICAL;
-            }
-
-            tbl->map[tbl->size] = del ? TR_DELETE : rlen ? r[rlen - 1] : TR_R_EMPTY;
-        }
-        else {
-            if (!rlen && !del) {
-                r = t; rlen = tlen;
-                if (!squash)
-                    o->op_private |= OPpTRANS_IDENTICAL;
-            }
-            else if (!squash && rlen == tlen && memEQ((char*)t, (char*)r, tlen)) {
-                o->op_private |= OPpTRANS_IDENTICAL;
-            }
-
-            for (i = 0; i < 256; i++)
-                tbl->map[i] = TR_UNMAPPED;
-            for (i = 0, j = 0; i < tlen; i++,j++) {
-                //DEBUG_U(PerlIO_printf(Perl_debug_log,"%s: %d: i=%d\n", __FILE__, __LINE__, i));
-                //DEBUG_U(PerlIO_printf(Perl_debug_log,"%s: %d: j=%d\n", __FILE__, __LINE__, j));
-                if (j >= rlen) {
-                    if (del) {
-                        if (tbl->map[t[i]] == TR_UNMAPPED)
-                            tbl->map[t[i]] = TR_DELETE;
-                        continue;
-                    }
-                    --j;
-                }
-                if (tbl->map[t[i]] == TR_UNMAPPED) {
-                    if (     UVCHR_IS_INVARIANT(t[i])
-                        && ! UVCHR_IS_INVARIANT(r[j]))
-                        grows = TRUE;
-                    tbl->map[t[i]] = r[j];
-                }
-            }
-            tbl->map[tbl->size] = del
-                                  ? TR_UNMAPPED
-                                  : rlen
-                                    ? TR_UNMAPPED
-                                    : TR_R_EMPTY;
-        }
-#endif
 
         DEBUG_U(PerlIO_printf(Perl_debug_log,"%s: %d\n", __FILE__, __LINE__));
         for (i = 0; i < tbl->size; i++) {
