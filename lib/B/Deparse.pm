@@ -52,7 +52,7 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
         MDEREF_SHIFT
     );
 
-$VERSION = '1.50';
+$VERSION = '1.51';
 use strict;
 our $AUTOLOAD;
 use warnings ();
@@ -5716,97 +5716,24 @@ sub tr_chr {
 # XXX This doesn't yet handle all cases correctly either
 
 sub tr_decode_utf8 {
-    my($swash_hv, $flags) = @_;
-    my %swash = $swash_hv->ARRAY;
-    my $final = undef;
-    $final = $swash{'FINAL'}->IV if exists $swash{'FINAL'};
-    my $none = $swash{"NONE"}->IV;
-    my $extra = $none + 1;
-    my(@from, @delfrom, @to);
-    my $line;
-    foreach $line (split /\n/, $swash{'LIST'}->PV) {
-	my($min, $max, $result) = split(/\t/, $line);
-	$min = hex $min;
-	if (length $max) {
-	    $max = hex $max;
-	} else {
-	    $max = $min;
-	}
-	$result = hex $result;
-	if ($result == $extra) {
-	    push @delfrom, [$min, $max];
-	} else {
-	    push @from, [$min, $max];
-	    push @to, [$result, $result + $max - $min];
-	}
+    my($tr_av, $flags) = @_;
+    use Data::Dumper;
+    printf STDERR "flags=0x%x\n", $flags;
+    print STDERR "first param: ", Dumper $tr_av;
+    my $invlist = $tr_av->ARRAYelt(0);
+    print STDERR __LINE__, "invlist", Dumper $invlist;
+    my $map = $tr_av->ARRAYelt(1);
+    print STDERR __LINE__, "map: ";
+    use bytes;
+    for my $i (0 .. length($map->PV)-1) {
+        my $char = substr($map->PV, $i, 1);
+        printf STDERR " %x", ord $char;
     }
-    for my $i (0 .. $#from) {
-	if ($from[$i][0] == ord '-') {
-	    unshift @from, splice(@from, $i, 1);
-	    unshift @to, splice(@to, $i, 1);
-	    last;
-	} elsif ($from[$i][1] == ord '-') {
-	    $from[$i][1]--;
-	    $to[$i][1]--;
-	    unshift @from, ord '-';
-	    unshift @to, ord '-';
-	    last;
-	}
-    }
-    for my $i (0 .. $#delfrom) {
-	if ($delfrom[$i][0] == ord '-') {
-	    push @delfrom, splice(@delfrom, $i, 1);
-	    last;
-	} elsif ($delfrom[$i][1] == ord '-') {
-	    $delfrom[$i][1]--;
-	    push @delfrom, ord '-';
-	    last;
-	}
-    }
-    if (defined $final and $to[$#to][1] != $final) {
-	push @to, [$final, $final];
-    }
-    push @from, @delfrom;
-    if ($flags & OPpTRANS_COMPLEMENT) {
-	my @newfrom;
-	my $next = 0;
-	for my $i (0 .. $#from) {
-	    push @newfrom, [$next, $from[$i][0] - 1];
-	    $next = $from[$i][1] + 1;
-	}
-	@from = ();
-	for my $range (@newfrom) {
-	    if ($range->[0] <= $range->[1]) {
-		push @from, $range;
-	    }
-	}
-    }
-    my($from, $to, $diff);
-    for my $chunk (@from) {
-	$diff = $chunk->[1] - $chunk->[0];
-	if ($diff > 1) {
-	    $from .= tr_chr($chunk->[0]) . "-" . tr_chr($chunk->[1]);
-	} elsif ($diff == 1) {
-	    $from .= tr_chr($chunk->[0]) . tr_chr($chunk->[1]);
-	} else {
-	    $from .= tr_chr($chunk->[0]);
-	}
-    }
-    for my $chunk (@to) {
-	$diff = $chunk->[1] - $chunk->[0];
-	if ($diff > 1) {
-	    $to .= tr_chr($chunk->[0]) . "-" . tr_chr($chunk->[1]);
-	} elsif ($diff == 1) {
-	    $to .= tr_chr($chunk->[0]) . tr_chr($chunk->[1]);
-	} else {
-	    $to .= tr_chr($chunk->[0]);
-	}
-    }
-    #$final = sprintf("%04x", $final) if defined $final;
-    #$none = sprintf("%04x", $none) if defined $none;
-    #$extra = sprintf("%04x", $extra) if defined $extra;
-    #print STDERR "final: $final\n none: $none\nextra: $extra\n";
-    #print STDERR $swash{'LIST'}->PV;
+    print STDERR "\n";
+    my $final = $tr_av->ARRAYelt(2);
+    print STDERR __LINE__, "final", Dumper $final;
+    my $from = "A";
+    my $to = "a";
     return (escape_str($from), escape_str($to));
 }
 
@@ -5816,13 +5743,16 @@ sub pp_trans {
     my($from, $to);
     my $class = class($op);
     my $priv_flags = $op->private;
+    use Data::Dumper;
     if ($class eq "PVOP") {
 	($from, $to) = tr_decode_byte($op->pv, $priv_flags);
     } elsif ($class eq "PADOP") {
+        print STDERR __LINE__, Dumper $self->padval($op->padix);
 	($from, $to)
-	  = tr_decode_utf8($self->padval($op->padix)->RV, $priv_flags);
+	  = tr_decode_utf8($self->padval($op->padix), $priv_flags);
     } else { # class($op) eq "SVOP"
-	($from, $to) = tr_decode_utf8($op->sv->RV, $priv_flags);
+        print STDERR __LINE__, Dumper $op->sv;
+	($from, $to) = tr_decode_utf8($op->sv, $priv_flags);
     }
     my $flags = "";
     $flags .= "c" if $priv_flags & OPpTRANS_COMPLEMENT;

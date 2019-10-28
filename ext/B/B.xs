@@ -1025,6 +1025,7 @@ next(o)
 		if (   cPVOPo->op_type == OP_TRANS
                     || cPVOPo->op_type == OP_TRANSR)
                 {
+                /* XXX */
                     const OPtrans_map *const tbl = (OPtrans_map*)cPVOPo->op_pv;
 		    ret = newSVpvn_flags(cPVOPo->op_pv,
                                               (char*)(&tbl->map[tbl->size + 1])
