@@ -6712,11 +6712,11 @@ Perl_invmap_dump(pTHX_ SV* invlist, UV *map)
 {
     const char indent[] = "    ";
 
-    PERL_ARGS_ASSERT_INVMAP_DUMP;
-
     UV len = _invlist_len(invlist);
     UV * array = invlist_array(invlist);
     UV i;
+
+    PERL_ARGS_ASSERT_INVMAP_DUMP;
 
     for (i = 0; i < len; i++) {
         UV start = array[i];
@@ -6816,7 +6816,7 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
      * If the input string isn't UTF-8, then everything is a single byte, and
      * can't grow, so this flag is ignored in doop.c unless the input is UTF-8.
      */
-    //bool grows = FALSE;
+    bool grows = FALSE;
 
     NV max_expansion = 1.;
 
@@ -7330,10 +7330,6 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
                     }
 
                     o->op_private |= OPpTRANS_GROWS;
-
-                    /* This pass is just to see if it grows.  No need to
-                     * continue having found the answer */
-                    //break;
                 }
 
                 /* The very first range is marked as adjacent to the non-existent
